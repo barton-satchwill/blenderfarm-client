@@ -29,7 +29,18 @@ def export_nova_password(project):
 
 	return 'export OS_PASSWORD="%s"' % nova_password
 
+def test_ipv6():
+	cmd = shlex.split('ping6 -c 2 ipv6.google.com')
+	p = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	for item in p.communicate():
+		if 'No route' in item:
+			sys.stderr.write("\nYou don't seem to be connected to an IPv6 network.\n\n")
+			sys.exit(1)
+
+
+
 def main():
+	test_ipv6()
 	project = sys.argv[1]
 	config_path = config.get(project,'credentials_file')
 	commands.append('source ' + config_path + " < /dev/null > /dev/null")
