@@ -7,7 +7,13 @@ if [ -z "$COMMAND" ]; then
   exit 1
 fi
 
-COMMAND_PATH="$(command -v "blenderfarm-$COMMAND")"
+COMMAND_PATH="$(command -v "blenderfarm-$COMMAND" || true)"
+
+# Support sh commands too
+if [ ! -x "$COMMAND_PATH" ]; then
+	COMMAND_PATH="$(command -v "blenderfarm-sh-$COMMAND")"
+fi
+
 if grep -i "^# provide blenderfarm completions" "$COMMAND_PATH" >/dev/null; then
   shift
   exec "$COMMAND_PATH" --complete "$@"
