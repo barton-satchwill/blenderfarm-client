@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+# Summary: set the blender repository
+# Usage: blenderfarm set-repo [repository url]
+#---	
+
+import sys, os
+import subprocess, shlex
+import config
+sys.path.append("/usr/local/lib/python2.7/site-packages")
+from novaclient.client import Client
+import requests
+
+
+config = config.getConfig()
+commands = []
+
+# Provide blenderfarm completions	
+# if (sys.argv[1] == "--complete"):
+# 	for project in config.sections():
+# 		print project
+# 	exit()
+
+
+nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+def main():
+	# print ';\n'.join(commands)
+	repo_url = sys.argv[1]
+	print "set repository url to '%s' in each server in the farm" % (repo_url)
+
+	payload = {'url': repo_url}
+
+	for server in nova.servers.list():
+		ipv6_address = server.networks['cybera'][1] 
+		server_url = 'http://[%s]:5000/set_repo' % (ipv6_address)
+		if '5e5f' in server_url: # this is the only server running, at the moment...
+			print "let's check " + server_url
+			r = requests.get(server_url, params=payload)
+			print r.url
+		else:
+			print server_url
+
+
+
+if __name__ == "__main__":
+	main()

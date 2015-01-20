@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+
+# Summary: load the cloud crednetials of the specified cloud project
+# Usage: blenderfarm switch <cloud-project>
+#---	
+
+import sys, os
+import subprocess, shlex
+import config
+
+
+config = config.getConfig()
+commands = []
+
+# Provide blenderfarm completions	
+if (sys.argv[1] == "--complete"):
+	for project in config.sections():
+		print project
+	exit()
+
+
+def export_nova_password(project):
+	osx_keychain_item = config.get(project, 'osx_keychain_item')
+	cmd = shlex.split('security find-generic-password -gs %s' % osx_keychain_item )
+	p = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	for item in p.communicate():
+		if 'password' in item:
+			nova_password = shlex.split(item)[1]
+
+	return 'export OS_PASSWORD="%s"' % nova_password
+
+def main():
+	project = sys.argv[1]
+	config_path = config.get(project,'credentials_file')
+	commands.append('source ' + config_path + " < /dev/null > /dev/null")
+	commands.append(export_nova_password(project))
+	commands.append('export SSH_IDENTITY="%s"' % config.get(project, 'default_ssh_key'))
+
+	print ';\n'.join(commands)
+
+
+if __name__ == "__main__":
+	main()
