@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+
+# Summary: manage the rendering operation on all blenderfarm nodes
+# Usage: blenderfarm render-manage [load|start|stop|status]
+# Help: - load <url>	refresh the render nodes with the files from the repository at the given url
+#	eg: blenderfarm render-manage load "github.com/cybera/iae-sub.git"
+#
+# - start	<output_dir> [<start_frame>, <end_frame>]
+# - stop	adfa
+# - status	adf 
+#---	
+
+import sys, os
+import config
+import requests
+sys.path.append("/usr/local/lib/python2.7/site-packages")
+from novaclient.client import Client
+
+config = config.getConfig()
+
+# Provide blenderfarm completions	
+if (sys.argv[1] == "--complete"):
+	print "load start stop status"
+	exit()
+
+
+def load():
+	try:
+		url = sys.argv[0]
+		request_params = {'url': url}
+		post_request('set_repo', request_params)
+
+	except IndexError:
+		print "whups!  I didn't get a url for the repository"
+
+
+
+def start():
+	try:
+		blend = sys.argv[0]
+		output_dir = "//" + sys.argv[1]
+		request_params = {'blend':blend, 'output_dir':output_dir}
+
+		#optional parameters
+		if len(sys.argv) >= 4:
+			start_frame = sys.argv[2]
+			end_frame = sys.argv[3]
+			request_params.update({'start_frame':start_frame, 'end_frame':end_frame})
+	
+		# print request_params
+		post_request('render_start', request_params)
+	
+	except IndexError:
+		print "I didn't get enough parameters" 
+
+
+
+def stop():
+	post_request('render_stop')
+
+
+def status():
+	post_request('render_status')
+
+
+
+def post_request(resource, request_params={}):
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for server in nova.servers.list():
+		ipv6_address = server.networks['cybera'][1] 
+		server_url = 'http://[%s]:5000/%s' % (ipv6_address, resource)
+
+		if '5e5f' in server_url: # this is the only server running, at the moment...
+			r = requests.get(server_url, params=request_params)
+			print r.text 
+			print r.url
+		# else:
+		# 	print server_url
+
+
+
+
+def main():
+	actions = {"load":load, "start":start, "stop":stop, "status":status}
+	action = sys.argv[1]
+
+	# remove program name and action
+	del sys.argv[0]
+	del sys.argv[0]
+
+	try:
+		actions[action]()
+	except KeyError:
+		print "don't know what you mean"
+
+
+
+if __name__ == "__main__":
+	main()
