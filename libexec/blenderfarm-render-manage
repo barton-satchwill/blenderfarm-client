@@ -1,14 +1,26 @@
 #!/usr/bin/env python
 
+# TODO: check to see if you're connected to a ipv6 network
+# TODO:
+
 # Summary: manage the rendering operation on all blenderfarm nodes
 # Usage: blenderfarm render-manage [load|start|stop|status]
-# Help: - load <url>	refresh the render nodes with the files from the repository at the given url
+# Help:
+# - load <url>
+#	refresh the render nodes with the files from the repository
+#	at the given url
 #	eg: blenderfarm render-manage load "https://github.com/barton-satchwill/fake-blender.git"
 #
 # - start	<blend> <output_dir> [<start_frame>, <end_frame>]
-# - stop	adfa
+#	start the rendering process.
+# 	eg: blenderfarm render-manage start "quicktest.blend" "my/image/dir/quicktest" 1 2
+#
+# - stop
+#	shoot the renderer in the head
+#
 # - status	adf 
-#---	
+#	probably some extract of the render log
+#--------------
 
 import sys, os
 import config
@@ -91,7 +103,8 @@ def main():
 	try:
 		actions[action]()
 	except KeyError:
-		print "don't know what you mean"
+		print "\nwhups, I don't recognise the '%s' action\n" % (action)
+		os.system('blenderfarm help render-manage')
 
 
 
