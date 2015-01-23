@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+
+# Summary: set the blender repository
+# Usage: blenderfarm set-repo [repository url]
+#---	
+
+import sys, os
+import subprocess, shlex
+import config
+sys.path.append("/usr/local/lib/python2.7/site-packages")
+from novaclient.client import Client
+import swiftclient
+import requests
+
+config = config.getConfig()
+commands = []
+
+# Provide blenderfarm completions	
+if (sys.argv[1] == "--complete"):
+	print "test store"
+	exit()
+
+
+def store():
+    print "uploading to Swift..."
+    swift = swiftclient.Connection(
+        authurl=os.environ['OS_AUTH_URL'],
+        key=os.environ['OS_PASSWORD'],
+        user=os.environ['OS_USERNAME'],
+        tenant_name=os.environ['OS_TENANT_NAME'],
+        auth_version=2)
+
+    container_name = 'my-new-container'
+    #swift.put_container(container_name)
+    #swift.put_object(container_name, 'hello.txt', contents='this is a test') # , content_type='text/plain')
+    #print swift.get_account()
+
+    print "----------------"
+    for container in swift.get_account()[1]:
+        print container['name']
+        for data in swift.get_container(container['name'])[1]:
+                print '{0}\t{1}\t{2}'.format(data['name'], data['bytes'], data['last_modified'])
+        print "----------------"
+
+
+def test():
+	root = '/Users/barton/'
+	bucket = 'mybucket'
+
+	for dirname, subdirs, filenames in os.walk('/Users/barton/blenderfarm'):
+		# don't go into any .git directories.
+		if '.git' in subdirs:
+			subdirs.remove('.git')
+		if 'client' in subdirs:
+			subdirs.remove('client')
+
+		# the subdirectories
+		for subdirname in subdirs:
+			print "subdir --> " + subdirname
+			# print "create bucket for " + os.path.join(dirname, subdirname).replace(' ','')
+			#swift.put_container(container_name)
+
+		# the filenames.
+		for filename in filenames:
+			f = os.path.join(dirname, filename).replace(root, '')
+			print "swift.put_object(bucket, %s, %s)" % (f, f)
+			# print "\tswift upload " + dirname + " --> " + filename
+
+
+
+
+
+def main():
+	print "this is a test..."
+	actions = {"test":test, "store":store}
+	action = sys.argv[1]
+
+	# remove program name and action
+	del sys.argv[0]
+	del sys.argv[0]
+
+	try:
+		actions[action]()
+	except KeyError:
+		print "\nwhups, I don't recognise the '%s' action\n" % (action)
+		os.system('blenderfarm help render-manage')
+
+
+
+if __name__ == "__main__":
+	main()
