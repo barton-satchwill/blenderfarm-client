@@ -1,29 +1,113 @@
 #!/usr/bin/env python
 
 # Summary: manage the RESTful service on all blenderfarm nodes
-# Usage: blenderfarm server-manage [start|stop]
-#---	
+# Usage: blenderfarm server-manage [start|stop|status]
+# Help:
+# - start : start the rendering managment service.
+# - stop : shoot the rendering managment service in the head
+# - status : probably some extract of the rendering managment service log
+# - build-farm [<start>, <end>]: create a set of rendering servers
+#	- start : starting id number for rendering server hostname
+#	- end : ending id number for rendering server hostname
+# - tear-down : delete all rendering servers in the farm
+#--------------
 
 import sys, os
 import config
 sys.path.append("/usr/local/lib/python2.7/site-packages")
 from novaclient.client import Client
 
+instance_base_name = 'blenderfarm'
+
 config = config.getConfig()
 
 # Provide blenderfarm completions	
 if (sys.argv[1] == "--complete"):
-	print "start stop"
+	print "start stop status build-farm"
 	exit()
+
+def start():
+	print "starting..."
+	run_remote_command("nohup ~/start-server > server.log &")
+
+
+def stop():
+	print "stopping..."
+	run_remote_command("pkill python")
+
+
+def status():
+	run_remote_command('pgrep -a python')
+
+
+def build_farm():
+	print "building a big, big farm..."
+	flavor = 'no flavor'
+	image = 'no image'
+	start = 0
+	end = 0
+	key = 'racbart'
+
+	if len(sys.argv) >= 1:
+		start = int(sys.argv[0])
+		end = int(sys.argv[0])
+
+	if len(sys.argv) >= 2:
+		end = int(sys.argv[1])
+
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for f in nova.flavors.list():
+		if 'blender' in f.name:
+			 flavor = f.id
+	for i in nova.images.list():
+		if 'Ubuntu 14.04' in i.name:
+			image = i.id
+
+	for index in range(start, end + 1):
+		name = '%s-%s' % (instance_base_name, str(index).zfill(2))
+		print name
+		nova.servers.create(name, image, flavor, key_name='%s' % key)
+
+
+
+def tear_down():
+	print "burning down the entire farm..."
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+	for server in nova.servers.list():
+		if instance_base_name in server.name:
+			print server.name + " : " + server.id
+			nova.servers.delete(server.id)
+
+
+
+def run_remote_command(cmd):
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for server in nova.servers.list():
+		ipv6_address = server.networks['cybera'][1] 
+		# print server.name + ": "+cmd
+		print
+		os.system("ssh -i %s ubuntu@%s '%s'" % (os.environ['SSH_IDENTITY'], ipv6_address, 'hostname'))
+		os.system("ssh -i %s ubuntu@%s '%s'" % (os.environ['SSH_IDENTITY'], ipv6_address, cmd))
+
+
 
 
 def main():
+	actions = {"start":start, "stop":stop, "status":status, "build-farm":build_farm, "tear-down":tear_down}
 	action = sys.argv[1]
-	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
-	for server in nova.servers.list():
-		ipv6_address = server.networks['cybera'][1] 
-		print server.name + ": "+action
-		#os.system("ssh -i %s ubuntu@%s 'hostname'" % (os.environ['SSH_IDENTITY'], ipv6_address))
+
+	# remove program name and action
+	del sys.argv[0]
+	del sys.argv[0]
+
+	try:
+		actions[action]()
+	except KeyError:
+		print "\nwhups, I don't recognise the '%s' action\n" % (action)
+		os.system('blenderfarm help server-manage')
+
 
 
 if __name__ == "__main__":
