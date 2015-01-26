@@ -17,8 +17,32 @@ commands = []
 
 # Provide blenderfarm completions	
 if (sys.argv[1] == "--complete"):
-	print "test store"
+	print "test store frames"
 	exit()
+
+
+
+def frames():
+	try:
+		blend = sys.argv[0]
+	except IndexError:
+		print "I didn't get enough parameters"
+
+	request_params = {'blend':blend}
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for server in nova.servers.list():
+		if 'blenderfarm-00' in server.name:
+			ipv6_address = server.networks['cybera'][1]
+			server_url = 'http://[%s]:5000/%s' % (ipv6_address, 'get_frames')
+
+			print request_params
+			r = requests.get(server_url, params=request_params)
+			# print r.text
+			for t in r.text.splitlines():
+				if 'frames' in t:
+					print t
+
 
 
 def store():
@@ -72,7 +96,7 @@ def test():
 
 def main():
 	print "this is a test..."
-	actions = {"test":test, "store":store}
+	actions = {"test":test, "store":store, "frames":frames}
 	action = sys.argv[1]
 
 	# remove program name and action
