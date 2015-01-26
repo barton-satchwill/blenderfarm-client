@@ -22,11 +22,12 @@
 #	probably some extract of the render log
 #--------------
 
-import sys, os
-import config
+
+from __future__ import division
 sys.path.append("/usr/local/lib/python2.7/site-packages")
 from novaclient.client import Client
-import requests
+import sys, os, requests, math
+import config
 
 config = config.getConfig()
 
@@ -51,19 +52,38 @@ def start():
 	try:
 		blend = sys.argv[0]
 		output_dir = sys.argv[1]
-		request_params = {'blend':blend, 'output_dir':output_dir}
-
-		#optional parameters
-		if len(sys.argv) >= 4:
-			start_frame = sys.argv[2]
-			end_frame = sys.argv[3]
-			request_params.update({'start_frame':start_frame, 'end_frame':end_frame})
-	
-		# print request_params
-		post_request('render_start', request_params)
-	
+		start_frame = int(sys.argv[2])
+		end_frame = int(sys.argv[3])
 	except IndexError:
-		print "I didn't get enough parameters" 
+		print "I didn't get enough parameters"
+
+	i=0
+	count = 0
+	request_params = {'blend':blend, 'output_dir':output_dir}
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for server in nova.servers.list():
+		if 'blenderfarm' in server.name:
+			count += 1
+	print "of %d servers, %d are renderfarm servers" % (len(nova.servers.list()), count)
+
+	partition = get_partition(start_frame, end_frame, count)
+	print "partition: %s" % partition
+	for server in nova.servers.list():
+		if 'blenderfarm' in server.name:
+			start_frame = partition[i][0]
+			end_frame = partition[i][1]
+			request_params.update({'start_frame':start_frame, 'end_frame':end_frame})
+			ipv6_address = server.networks['cybera'][1]
+			server_url = 'http://[%s]:5000/%s' % (ipv6_address, 'render_start')
+
+			# print request_params
+			r = requests.get(server_url, params=request_params)
+			print r.text
+			print r.url
+			i+=1
+	
+	
 
 
 
@@ -75,7 +95,6 @@ def status():
 	post_request('render_status')
 
 
-
 def post_request(resource, request_params={}):
 	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
 
@@ -83,12 +102,29 @@ def post_request(resource, request_params={}):
 		ipv6_address = server.networks['cybera'][1] 
 		server_url = 'http://[%s]:5000/%s' % (ipv6_address, resource)
 
-		if '5e5f' in server_url: # this is the only server running, at the moment...
+		if 'blenderfarm' in server.name:
 			r = requests.get(server_url, params=request_params)
 			print r.text 
 			print r.url
-		# else:
-		# 	print server_url
+
+
+
+def get_partition(start, end, renderers):
+	partition = []
+	frames = (end - start)
+	step = int(math.ceil(frames/renderers))
+
+	start_frame=start
+	end_frame=0
+	while end_frame < end:
+		end_frame=start_frame + step
+		if end_frame > end:
+			end_frame = end
+		print "%d to %d" % (start_frame, end_frame)
+		element = start_frame, end_frame
+		partition.append(element)
+		start_frame = end_frame + 1
+	return partition
 
 
 
