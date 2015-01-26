@@ -24,9 +24,9 @@
 
 
 from __future__ import division
+import sys, os, requests, math
 sys.path.append("/usr/local/lib/python2.7/site-packages")
 from novaclient.client import Client
-import sys, os, requests, math
 import config
 
 config = config.getConfig()
@@ -47,7 +47,6 @@ def load():
 		print "whups!  I didn't get a url for the repository"
 
 
-
 def start():
 	try:
 		blend = sys.argv[0]
@@ -58,34 +57,23 @@ def start():
 		print "I didn't get enough parameters"
 
 	i=0
-	count = 0
+	renderers = farm_size()
 	request_params = {'blend':blend, 'output_dir':output_dir}
 	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
 
+	partition = get_partition(start_frame, end_frame, renderers)
 	for server in nova.servers.list():
-		if 'blenderfarm' in server.name:
-			count += 1
-	print "of %d servers, %d are renderfarm servers" % (len(nova.servers.list()), count)
-
-	partition = get_partition(start_frame, end_frame, count)
-	print "partition: %s" % partition
-	for server in nova.servers.list():
-		if 'blenderfarm' in server.name:
+		if 'blenderfarm' in server.name and i < len(partition):
 			start_frame = partition[i][0]
 			end_frame = partition[i][1]
 			request_params.update({'start_frame':start_frame, 'end_frame':end_frame})
 			ipv6_address = server.networks['cybera'][1]
 			server_url = 'http://[%s]:5000/%s' % (ipv6_address, 'render_start')
 
-			# print request_params
+			print request_params
 			r = requests.get(server_url, params=request_params)
-			print r.text
-			print r.url
 			i+=1
 	
-	
-
-
 
 def stop():
 	post_request('render_stop')
@@ -120,11 +108,21 @@ def get_partition(start, end, renderers):
 		end_frame=start_frame + step
 		if end_frame > end:
 			end_frame = end
-		print "%d to %d" % (start_frame, end_frame)
 		element = start_frame, end_frame
 		partition.append(element)
 		start_frame = end_frame + 1
 	return partition
+
+def farm_size():
+	count = 0
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+	for server in nova.servers.list():
+		if 'blenderfarm' in server.name:
+			count += 1
+	if count < 1:
+		print "no blenderfarm servers found"
+		sys.exit()
+	return count
 
 
 
