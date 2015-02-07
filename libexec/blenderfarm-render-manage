@@ -20,6 +20,9 @@
 #
 # - status
 #	probably some extract of the render log
+#
+# - inspect_blend <blend>
+#	check the scenes and frame count in a blend
 #--------------
 
 
@@ -30,11 +33,13 @@ import requests, math
 from novaclient.client import Client
 import config
 
+instance_base_name = 'blenderfarm'
+
 config = config.getConfig()
 
 # Provide blenderfarm completions	
 if (sys.argv[1] == "--complete"):
-	print "load start stop status"
+	print "load start stop status inspect_blend"
 	exit()
 
 
@@ -64,7 +69,7 @@ def start():
 
 	partition = get_partition(start_frame, end_frame, renderers)
 	for server in nova.servers.list():
-		if 'blenderfarm' in server.name and i < len(partition):
+		if instance_base_name in server.name and i < len(partition):
 			start_frame = partition[i][0]
 			end_frame = partition[i][1]
 			request_params.update({'start_frame':start_frame, 'end_frame':end_frame})
@@ -83,6 +88,25 @@ def stop():
 def status():
 	post_request('render_status')
 
+def inspect_blend():
+	try:
+		blend = sys.argv[0]
+	except IndexError:
+		print "I didn't get enough parameters"
+		sys.exit(1)
+
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for server in nova.servers.list():
+		ipv6_address = server.networks['cybera'][1] 
+		server_url = 'http://[%s]:5000/%s' % (ipv6_address, 'inspect_blend')
+		if instance_base_name in server.name:
+			r = requests.get(server_url, params={'blend':blend})
+			for line in r.text.splitlines():
+				if 'frames' in line:
+					print line
+			sys.exit()
+
 
 def post_request(resource, request_params={}):
 	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
@@ -91,7 +115,7 @@ def post_request(resource, request_params={}):
 		ipv6_address = server.networks['cybera'][1] 
 		server_url = 'http://[%s]:5000/%s' % (ipv6_address, resource)
 
-		if 'blenderfarm' in server.name:
+		if instance_base_name in server.name:
 			r = requests.get(server_url, params=request_params)
 			print r.text 
 
@@ -117,7 +141,7 @@ def farm_size():
 	count = 0
 	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
 	for server in nova.servers.list():
-		if 'blenderfarm' in server.name:
+		if instance_base_name in server.name:
 			count += 1
 	if count < 1:
 		print "no blenderfarm servers found"
@@ -127,7 +151,7 @@ def farm_size():
 
 
 def main():
-	actions = {"load":load, "start":start, "stop":stop, "status":status}
+	actions = {"load":load, "start":start, "stop":stop, "status":status, "inspect_blend":inspect_blend}
 	action = sys.argv[1]
 
 	# remove program name and action
