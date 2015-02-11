@@ -1,94 +1,84 @@
 #!/usr/bin/env python
 
-# Summary: set the blender repository
-# Usage: blenderfarm set-repo [repository url]
+# Summary: prototyping new functionality
+# Usage: blenderfarm test [build_farm|tear_down|list]
 #---	
 
+from __future__ import division
 import sys, os
 import subprocess, shlex
 import config
 sys.path.append("/usr/local/lib/python2.7/site-packages")
 from novaclient.client import Client
-import swiftclient
-import requests
+# import swiftclient
+import requests, math
+
+instance_base_name = 'blenderfarm'
 
 config = config.getConfig()
 commands = []
 
 # Provide blenderfarm completions	
 if (sys.argv[1] == "--complete"):
-	print "test store frames"
+	print "build_farm tear_down list"
 	exit()
 
 
 
-def frames():
-	try:
-		blend = sys.argv[0]
-	except IndexError:
-		print "I didn't get enough parameters"
+def build_farm():
+	print "tesing the build of a farm..."
+	flavor = 'no flavor'
+	image = 'no image'
+	start = 0
+	end = 0
+	key = 'blender'
 
-	request_params = {'blend':blend}
+	if len(sys.argv) >= 1:
+		start = int(sys.argv[0])
+		end = int(sys.argv[0])
+
+	if len(sys.argv) >= 2:
+		end = int(sys.argv[1])
+
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+
+	for f in nova.flavors.list():
+		if 'blender.24c2g' in f.name:
+			 flavor = f.id
+	for i in nova.images.list():
+		if 'blender' in i.name:
+			image = i.id
+
+	cmd = shlex.split('nova server-group-list')
+	p = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	for item in p.communicate()[0].splitlines():
+		if 'render-farm' in item:
+			group = item.split()[1]
+
+	hints = [('group',group)]
+	for index in range(start, end + 1):
+		name = '%s-%s' % (instance_base_name, str(index).zfill(2))
+		print name
+		nova.servers.create(name, image, flavor, key_name=key, scheduler_hints=hints)
+
+
+
+def tear_down():
+	print "burning down the entire farm..."
+	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
+	for server in nova.servers.list():
+		if instance_base_name in server.name:
+			print server.name + " : " + server.id
+			nova.servers.delete(server.id)
+
+
+def instance_list():
 	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
 
 	for server in nova.servers.list():
-		if 'blenderfarm-00' in server.name:
-			ipv6_address = server.networks['cybera'][1]
-			server_url = 'http://[%s]:5000/%s' % (ipv6_address, 'get_frames')
-
-			print request_params
-			r = requests.get(server_url, params=request_params)
-			# print r.text
-			for t in r.text.splitlines():
-				if 'frames' in t:
-					print t
-
-
-
-def store():
-    print "uploading to Swift..."
-    swift = swiftclient.Connection(
-        authurl=os.environ['OS_AUTH_URL'],
-        key=os.environ['OS_PASSWORD'],
-        user=os.environ['OS_USERNAME'],
-        tenant_name=os.environ['OS_TENANT_NAME'],
-        auth_version=2)
-
-    container_name = 'my-new-container'
-    #swift.put_container(container_name)
-    #swift.put_object(container_name, 'hello.txt', contents='this is a test') # , content_type='text/plain')
-    #print swift.get_account()
-
-    print "----------------"
-    for container in swift.get_account()[1]:
-        print container['name']
-        for data in swift.get_container(container['name'])[1]:
-                print '{0}\t{1}\t{2}'.format(data['name'], data['bytes'], data['last_modified'])
-        print "----------------"
-
-
-def test():
-	root = '/Users/barton/'
-	bucket = 'mybucket'
-
-	for dirname, subdirs, filenames in os.walk('/Users/barton/blenderfarm'):
-		# don't go into any .git directories.
-		if '.git' in subdirs:
-			subdirs.remove('.git')
-		if 'client' in subdirs:
-			subdirs.remove('client')
-
-		# the subdirectories
-		for subdirname in subdirs:
-			print "subdir --> " + subdirname
-			# print "create bucket for " + os.path.join(dirname, subdirname).replace(' ','')
-			#swift.put_container(container_name)
-
-		# the filenames.
-		for filename in filenames:
-			f = os.path.join(dirname, filename).replace(root, '')
-			print "swift.put_object(bucket, %s, %s)" % (f, f)
-			# print "\tswift upload " + dirname + " --> " + filename
+		if instance_base_name in server.name:
+			ipv6_address = server.networks['cybera'][1] 
+			print server.name
 
 
 
@@ -96,7 +86,7 @@ def test():
 
 def main():
 	print "this is a test..."
-	actions = {"test":test, "store":store, "frames":frames}
+	actions = {"build_farm":build_farm, "tear_down":tear_down, "list":instance_list}
 	action = sys.argv[1]
 
 	# remove program name and action
@@ -107,7 +97,7 @@ def main():
 		actions[action]()
 	except KeyError:
 		print "\nwhups, I don't recognise the '%s' action\n" % (action)
-		os.system('blenderfarm help render-manage')
+		os.system('blenderfarm help test')
 
 
 
