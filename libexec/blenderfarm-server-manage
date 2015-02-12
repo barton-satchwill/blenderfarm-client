@@ -44,11 +44,14 @@ def status():
 
 def build_farm():
 	print "building a big, big farm..."
-	flavor = 'no flavor'
-	image = 'no image'
+	flavor_id = 'no flavor'
+	image_id = 'no image'
 	start = 0
 	end = 0
-	key = 'blender'
+	flavor_name = config.get(os.environ['BLENDERFARM'], 'flavor_name')
+	image_name = config.get(os.environ['BLENDERFARM'], 'image_name')
+	key_name = config.get(os.environ['BLENDERFARM'], 'key_name')
+
 
 	if len(sys.argv) >= 1:
 		start = int(sys.argv[0])
@@ -60,16 +63,16 @@ def build_farm():
 	nova = Client(2, os.environ['OS_USERNAME'], os.environ['OS_PASSWORD'], os.environ['OS_TENANT_NAME'], os.environ['OS_AUTH_URL'])
 
 	for f in nova.flavors.list():
-		if 'blender' in f.name:
-			 flavor = f.id
+		if flavor_name in f.name:
+			 flavor_id = f.id
 	for i in nova.images.list():
-		if 'blender' in i.name:
-			image = i.id
+		if image_name in i.name:
+			image_id = i.id
 
 	for index in range(start, end + 1):
 		name = '%s-%s' % (instance_base_name, str(index).zfill(2))
 		print name
-		nova.servers.create(name, image, flavor, key_name='%s' % key)
+		nova.servers.create(name, image_id, flavor_id, key_name='%s' % key_name)
 
 
 

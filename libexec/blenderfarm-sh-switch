@@ -46,6 +46,7 @@ def main():
 	commands.append('source ' + config_path + " < /dev/null > /dev/null")
 	commands.append(export_nova_password(project))
 	commands.append('export SSH_IDENTITY="%s"' % config.get(project, 'default_ssh_key'))
+	commands.append('export BLENDERFARM="%s"' % project)
 
 	print ';\n'.join(commands)
 
