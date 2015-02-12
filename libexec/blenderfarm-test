@@ -5,13 +5,14 @@
 #---	
 
 from __future__ import division
-import sys, os
+import sys, os, time
 import subprocess, shlex
 import config
 sys.path.append("/usr/local/lib/python2.7/site-packages")
 from novaclient.client import Client
-# import swiftclient
+import swiftclient
 import requests, math
+from datetime import datetime
 
 instance_base_name = 'blenderfarm'
 
@@ -20,7 +21,7 @@ commands = []
 
 # Provide blenderfarm completions	
 if (sys.argv[1] == "--complete"):
-	print "build_farm tear_down list"
+	print "build_farm tear_down list swift_status"
 	exit()
 
 
@@ -49,10 +50,12 @@ def build_farm():
 		if 'blender' in i.name:
 			image = i.id
 
+	placement_group = config.get(os.environ['BLENDERFARM'], 'server-group')
+
 	cmd = shlex.split('nova server-group-list')
 	p = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 	for item in p.communicate()[0].splitlines():
-		if 'render-farm' in item:
+		if placement_group in item:
 			group = item.split()[1]
 
 	hints = [('group',group)]
@@ -84,9 +87,50 @@ def instance_list():
 
 
 
+
+
+def swift_status():
+	try:
+		folder = sys.argv[0]
+		print "reporting on Swift upload of %s" % folder
+	except IndexError:
+		print "whups!  I didn't get a Swift pseudo-folder to check"
+		sys.exit(1)
+
+	swift = swiftclient.Connection(
+		authurl=os.environ['OS_AUTH_URL'], 
+		key=os.environ['OS_PASSWORD'],
+		user=os.environ['OS_USERNAME'], 
+		tenant_name=os.environ['OS_TENANT_NAME'],
+		auth_version=2)
+
+	for container in swift.get_account()[1]:
+		min_frame = 9999
+		max_frame = 0
+		gap = False
+		print "checking path '%s' in container '%s'" % (folder, container['name'])
+		for data in swift.get_container(container['name'])[1]:
+			if folder in data['name']:
+				frame = int(data['name'][-9:-4]) # slice out the index number
+				if frame > max_frame + 1:
+					gap = True
+					print "gap found in '%s' between frames %d and %d" % (folder, max_frame, frame)
+				if frame > max_frame: max_frame = frame
+				if frame < min_frame: min_frame = frame
+				next_frame = int(frame) + 1
+				print '{0}\t{1}\t{2}'.format(
+					data['name'], 
+					data['bytes'], 
+					time.strftime('%Y-%m-%d %H:%M', time.strptime(data['last_modified'], '%Y-%m-%dT%H:%M:%S.%f'))
+				 )
+		if not gap:
+			print "no gaps found in '%s' between frames %d and %d" % (folder, min_frame, max_frame)
+
+
+
 def main():
 	print "this is a test..."
-	actions = {"build_farm":build_farm, "tear_down":tear_down, "list":instance_list}
+	actions = {"build_farm":build_farm, "tear_down":tear_down, "list":instance_list, "swift_status":swift_status}
 	action = sys.argv[1]
 
 	# remove program name and action
